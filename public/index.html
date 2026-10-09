@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#4F7CF7">
+<meta name="format-detection" content="telephone=no">
+<title>学生课表系统</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%234F7CF7'/><rect x='3' y='4' width='10' height='3' rx='1' fill='white'/><rect x='3' y='9' width='7' height='3' rx='1' fill='white'/></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">课</span>
+    <div>
+      <h1>学生课表系统</h1>
+      <p class="sub">Student Timetable System · 导入 / 导出 / 日历同步</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <select id="termSelect" title="选择学期"></select>
+    <div class="week-nav">
+      <button class="btn icon" id="prevWeek" title="上一周">‹</button>
+      <select id="weekSelect" title="选择周次"></select>
+      <button class="btn icon" id="nextWeek" title="下一周">›</button>
+      <button class="btn ghost" id="thisWeek">本周</button>
+    </div>
+    <button class="btn" id="btnImport">导入</button>
+    <button class="btn" id="btnExport">导出</button>
+    <button class="btn ghost" id="btnHoliday">节假日</button>
+    <button class="btn ghost" id="btnTermSettings">学期设置</button>
+    <button class="btn ghost" id="btnSubscribe">日历订阅</button>
+    <button class="btn ghost" id="btnConn" title="配置 API Key">连接</button>
+  </div>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+
+<main class="wrap">
+  <section class="stats" id="stats"></section>
+
+  <section class="board">
+    <div class="board-bar">
+      <div class="bar-left"><span id="weekRange">—</span></div>
+      <div class="bar-right">
+        <div class="seg" id="viewSwitch">
+          <button class="seg-btn active" data-view="grid">周视图</button>
+          <button class="seg-btn" data-view="agenda">日程列表</button>
+        </div>
+      </div>
+    </div>
+    <div class="board-scroll">
+      <div class="board-head" id="boardHead"></div>
+      <div class="board-body">
+        <div class="time-col" id="timeCol"></div>
+        <div class="days" id="days"></div>
+      </div>
+    </div>
+    <div class="agenda" id="agenda"></div>
+  </section>
+
+  <section class="list-panel">
+    <div class="list-head">
+      <h2>课程列表 <span class="muted" id="listCount"></span></h2>
+      <button class="btn primary" id="btnAddCourse">+ 新增课程</button>
+    </div>
+    <div class="table-wrap">
+      <table class="table" id="courseTable">
+        <thead>
+          <tr><th>课程</th><th>教师</th><th>地点</th><th>星期</th><th>节次</th><th>周次</th><th>班级</th><th>操作</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- ================= 课程编辑 ================= -->
+<div class="modal" id="modalCourse">
+  <div class="modal-card">
+    <div class="modal-head"><h3 id="courseModalTitle">新增课程</h3><button class="close" data-close>×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="f_id">
+      <div class="grid2">
+        <label>课程名称 <b>*</b><input id="f_name" placeholder="高等数学A（上）"></label>
+        <label>教师<input id="f_teacher" placeholder="张伟"></label>
+        <label>上课地点<input id="f_location" placeholder="教三-301"></label>
+        <label>班级<input id="f_className" placeholder="计科2301"></label>
+        <label>星期 <b>*</b>
+          <select id="f_dayOfWeek">
+            <option value="1">周一</option><option value="2">周二</option><option value="3">周三</option>
+            <option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option>
+          </select>
+        </label>
+        <label>周次规则
+          <select id="f_weeksMode">
+            <option value="all">全学期</option><option value="range">连续周</option>
+            <option value="odd">单周</option><option value="even">双周</option><option value="list">指定周</option>
+          </select>
+        </label>
+        <div class="row3" id="weeksRangeRow">
+          <label>起始周<input type="number" id="f_weeksStart" min="1" value="1"></label>
+          <label>结束周<input type="number" id="f_weeksEnd" min="1" value="16"></label>
+        </div>
+        <label id="weeksListRow" class="hidden">指定周（逗号分隔）<input id="f_weeksList" placeholder="1,3,5-9"></label>
+        <label>开始节次 <b>*</b><input type="number" id="f_startPeriod" min="1" value="1"></label>
+        <label>结束节次<input type="number" id="f_endPeriod" min="1" value="2" placeholder="留空等于开始节次"></label>
+        <label>开始时间<input id="f_startTime" placeholder="留空则按节次表自动推导，如 08:00"></label>
+        <label>结束时间<input id="f_endTime" placeholder="留空则按节次表自动推导，如 09:40"></label>
+        <label>学分<input type="number" step="0.5" id="f_credit" placeholder="4"></label>
+        <label>颜色<input type="color" id="f_color" value="#4F7CF7"></label>
+      </div>
+      <label class="full">备注<textarea id="f_note" rows="2" placeholder="选修 / 单双周说明等"></textarea></label>
+      <p class="hint" id="periodHint"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger ghost" id="btnDeleteCourse" hidden>删除</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" data-close>取消</button>
+      <button class="btn primary" id="btnSaveCourse">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 导入 ================= -->
+<div class="modal" id="modalImport">
+  <div class="modal-card wide">
+    <div class="modal-head"><h3>导入课表</h3><button class="close" data-close>×</button></div>
+    <div class="modal-body">
+      <div class="tabs">
+        <button class="tab active" data-imp="file">文件 / 文本</button>
+        <button class="tab" data-imp="url">远程 URL</button>
+        <button class="tab" data-imp="json">JSON 对象</button>
+      </div>
+      <div class="pane" id="imp-file">
+        <div class="uploader" id="uploader">
+          <input type="file" id="f_file" accept=".json,.csv,.txt,.ics">
+          <p>点击或拖拽上传 <b>.json / .csv / .ics</b> 文件</p>
+        </div>
+        <label class="full">或直接粘贴内容<textarea id="f_importText" rows="8" placeholder="可粘贴 CSV / JSON / ICS 内容"></textarea></label>
+      </div>
+      <div class="pane hidden" id="imp-url">
+        <label class="full">远程地址（支持本系统导出接口、任何其他系统提供的 ICS / JSON）
+          <input id="f_importUrl" placeholder="http://192.168.1.10:3000/api/export?format=ics&termId=xxx&api_key=xxx">
+        </label>
+        <p class="hint">服务端会主动拉取该地址并解析，因此手机 / 局域网内的其他服务也能作为数据源。</p>
+      </div>
+      <div class="pane hidden" id="imp-json">
+        <label class="full">JSON（可为 <code>{term,courses,holidays}</code> 或课程数组）
+          <textarea id="f_importJson" rows="8" placeholder='[{"name":"高等数学","dayOfWeek":1,"startPeriod":1,"endPeriod":2,"weeks":"1-16周"}]'></textarea></label>
+      </div>
+      <div class="grid3">
+        <label>数据格式
+          <select id="f_importFormat">
+            <option value="auto">自动识别</option><option value="json">JSON</option>
+            <option value="csv">CSV</option><option value="ics">ICS 日历</option>
+          </select>
+        </label>
+        <label>冲突策略
+          <select id="f_importMode">
+            <option value="upsert">upsert 去重更新（推荐）</option>
+            <option value="merge">merge 追加</option>
+            <option value="replace">replace 覆盖清空</option>
+          </select>
+        </label>
+        <label>目标学期
+          <select id="f_importTerm"></select>
+        </label>
+      </div>
+      <pre class="result hidden" id="importResult"></pre>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="btnTemplate">下载模板</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" data-close>关闭</button>
+      <button class="btn primary" id="btnDoImport">开始导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 导出 ================= -->
+<div class="modal" id="modalExport">
+  <div class="modal-card">
+    <div class="modal-head"><h3>导出课表</h3><button class="close" data-close>×</button></div>
+    <div class="modal-body">
+      <div class="export-grid">
+        <button class="xcard" data-export="json"><b>JSON</b><span>完整结构化数据，含学期与节次表</span></button>
+        <button class="xcard" data-export="csv"><b>CSV</b><span>Excel / WPS 可直接打开（含 BOM）</span></button>
+        <button class="xcard" data-export="xlsx"><b>Excel (.xlsx)</b><span>三工作表：课表 / 节假调休 / 学期节次</span></button>
+        <button class="xcard" data-export="csv-grid"><b>CSV 周视图</b><span>行=节次 列=星期，便于打印张贴</span></button>
+        <button class="xcard accent" data-export="ics"><b>ICS 日历</b><span>可导入任意日历客户端</span></button>
+      </div>
+      <div class="grid3">
+        <label>ICS 模式
+          <select id="f_expMode"><option value="recurrence">recurrence（RRULE）</option><option value="flat">flat（逐条事件）</option></select>
+        </label>
+        <label>时区写法
+          <select id="f_expTz"><option value="floating">floating（推荐国产手机）</option><option value="tzid">tzid + VTIMEZONE</option></select>
+        </label>
+        <label>提前提醒（分钟）<input type="number" id="f_expRemind" value="15" min="0"></label>
+      </div>
+      <p class="hint">导出文件会通过浏览器下载；若需程序化调用，请直接使用 API：<code>GET /api/export?format=…&amp;termId=…</code>（头带 <code>X-API-Key</code>）。</p>
+    </div>
+    <div class="modal-foot"><span class="spacer"></span><button class="btn ghost" data-close>关闭</button></div>
+  </div>
+</div>
+
+<!-- ================= 学期设置 ================= -->
+<div class="modal" id="modalTerm">
+  <div class="modal-card">
+    <div class="modal-head"><h3>学期设置</h3><button class="close" data-close>×</button></div>
+    <div class="modal-body">
+      <div class="grid2">
+        <label>学期名称 <b>*</b><input id="t_name"></label>
+        <label>第一周周一 <b>*</b><input type="date" id="t_startDate"></label>
+        <label>总周数 <b>*</b><input type="number" id="t_weeks" min="1" max="40"></label>
+        <label></label>
+      </div>
+      <h4 class="sec">节次时间表</h4>
+      <div id="periodRows" class="period-rows"></div>
+      <button class="btn ghost small" id="btnAddPeriod">+ 增加一节</button>
+      <div class="modal-foot inline">
+        <button class="btn danger ghost" id="btnDeleteTerm">删除学期</button>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="btnAddTerm">+ 新建学期</button>
+        <button class="btn primary" id="btnSaveTerm">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 节假日 ================= -->
+<div class="modal" id="modalHoliday">
+  <div class="modal-card">
+    <div class="modal-head"><h3>节假日与调休</h3><button class="close" data-close>×</button></div>
+    <div class="modal-body">
+      <div class="grid3">
+        <label>日期<input type="date" id="h_date"></label>
+        <label>类型
+          <select id="h_type"><option value="holiday">放假（课程取消）</option><option value="makeup">调休补课</option></select>
+        </label>
+        <label id="h_targetRow" class="hidden">执行星期几的课表
+          <select id="h_targetDayOfWeek">
+            <option value="1">周一</option><option value="2">周二</option><option value="3">周三</option>
+            <option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="7">周日</option>
+          </select>
+        </label>
+      </div>
+      <label class="full">说明<input id="h_name" placeholder="国庆节假期 / 国庆调休"></label>
+      <button class="btn primary small" id="btnAddHoliday">添加</button>
+      <table class="table compact" id="holidayTable" style="margin-top:14px">
+        <thead><tr><th>日期</th><th>类型</th><th>执行星期</th><th>说明</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="modal-foot"><span class="spacer"></span><button class="btn ghost" data-close>关闭</button></div>
+  </div>
+</div>
+
+<!-- ================= 日历订阅 ================= -->
+<div class="modal" id="modalSubscribe">
+  <div class="modal-card wide">
+    <div class="modal-head"><h3>日历订阅（同步到小米手机日历）</h3><button class="close" data-close>×</button></div>
+    <div class="modal-body">
+      <h4 class="sec">第 1 步：复制订阅地址</h4>
+      <div class="copy-row"><input id="subUrl" readonly><button class="btn primary" id="btnCopySub">复制</button></div>
+      <p class="hint">该地址无需登录，URL 中的令牌即为凭据。泄漏后请点下方「重置令牌」。</p>
+      <div class="grid2">
+        <label>输出模式<select id="subMode"><option value="recurrence">recurrence（体积小）</option><option value="flat">flat（兼容性最强）</option></select></label>
+        <label>提前提醒（分钟）<input type="number" id="subRemind" value="15" min="0"></label>
+      </div>
+      <div class="copy-row"><input id="subUrlFull" readonly><button class="btn ghost" id="btnCopySubFull">复制带参数</button></div>
+      <h4 class="sec">第 2 步：小米日历中添加</h4>
+      <ol class="steps">
+        <li>打开手机「日历」App → 右上角 <b>⋮</b> 菜单。</li>
+        <li>进入 <b>设置</b> → <b>日历订阅 / 添加订阅日历</b>。</li>
+        <li>粘贴上方地址 → 确认。<b>注意：手机与运行本服务的电脑须处于同一局域网，且该电脑防火墙放行端口。</b></li>
+        <li>回到日历 → 右上角 ⋮ → 勾选刚出现的日历名称即可显示。</li>
+        <li>若希望立即刷新：下拉手动刷新，或等待约 1 小时自动同步。</li>
+      </ol>
+      <div class="modal-foot inline">
+        <button class="btn danger ghost" id="btnRotateToken">重置令牌</button>
+        <button class="btn ghost" id="btnDownloadIcs">下载 .ics 文件</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 连接设置 ================= -->
+<div class="modal" id="modalConn">
+  <div class="modal-card">
+    <div class="modal-head"><h3>连接设置</h3><button class="close" data-close>×</button></div>
+    <div class="modal-body">
+      <label class="full">API Key
+        <input id="apiKeyInput" placeholder="sk_xxxxxxxx">
+      </label>
+      <p class="hint">服务启动时会在控制台打印 API Key；也可在 <code>data/config.json</code> 中查看。
+        也支持在页面地址后追加 <code>#key=你的密钥</code> 自动填入。</p>
+    </div>
+    <div class="modal-foot"><span class="spacer"></span><button class="btn ghost" data-close>取消</button><button class="btn primary" id="btnSaveKey">保存并连接</button></div>
+  </div>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="toast" id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

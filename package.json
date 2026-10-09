@@ -1,0 +1,27 @@
+{
+  "name": "student-timetable-system",
+  "version": "1.0.0",
+  "description": "学生课表系统：支持 JSON / CSV / Excel / ICS 多方式导入导出，提供 REST API 与可订阅的日历地址，可一键同步至小米手机日历。",
+  "main": "src/server.js",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node scripts/smoke.js"
+  },
+  "dependencies": {},
+  "keywords": [
+    "timetable",
+    "schedule",
+    "ics",
+    "calendar",
+    "xlsx",
+    "api"
+  ],
+  "license": "MIT",
+  "author": "akexin"
+}

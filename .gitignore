@@ -1,0 +1,10 @@
+node_modules/
+*.log
+.DS_Store
+data/db.json
+data/config.json
+data/njpi-timetable.json
+*.ics.bak
+data/*.tmp
+scripts/tmp/
+!data/.gitkeep
