@@ -1,0 +1,99 @@
+name: Build Android APK
+
+# 在 GitHub 的 Ubuntu runner 上构建，本机无需 JDK / Android SDK。
+# runner 自带 Android SDK，这里再显式装一遍 34 平台与构建工具，避免镜像差异。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'scripts/build-standalone.js'
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 关键步骤：把 src/*.js 打包成浏览器可运行的 public/offline/bundle.js
+      - name: Build offline bundle
+        run: node scripts/build-standalone.js
+
+      - name: Verify bundle exists
+        run: test -s public/offline/bundle.js && ls -lh public/offline/
+
+      # 质量门：在模拟浏览器环境实跑离线链路（鉴权/存储/ICS/XLSX 二进制），
+      # 不通过就不进入 APK 打包，避免产出"能装但打不开"的空壳。
+      - name: Test offline runtime
+        run: node scripts/test-offline.js
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
+      - name: Install SDK components
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Show APK info
+        run: |
+          ls -lh android/app/build/outputs/apk/debug/
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
+            android/app/build/outputs/apk/debug/*.apk | head -20 || true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: student-timetable-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      # 同步到固定的 apk-latest 预发布，方便手机直接下载安装
+      - name: Publish to apk-latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: 学生课表 APK（最新构建）
+          body: |
+            由 GitHub Actions 自动构建，基于提交 ${{ github.sha }}。
+
+            安装说明：下载 `app-debug.apk` → 允许「安装未知来源应用」→ 安装。
+          files: android/app/build/outputs/apk/debug/*.apk
+          prerelease: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

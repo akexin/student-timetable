@@ -11,7 +11,10 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node scripts/seed.js",
-    "test": "node scripts/smoke.js"
+    "test": "node scripts/smoke.js",
+    "build:standalone": "node scripts/build-standalone.js",
+    "test:offline": "node scripts/build-standalone.js && node scripts/test-offline.js",
+    "test:all": "node scripts/smoke.js && node scripts/build-standalone.js && node scripts/test-offline.js"
   },
   "dependencies": {},
   "keywords": [

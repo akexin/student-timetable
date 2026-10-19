@@ -1,0 +1,5 @@
+// 顶层构建脚本：只声明插件版本，具体配置在 app/build.gradle。
+// AGP 8.5.2 对应 Gradle 8.7（见 .github/workflows/android.yml）。
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

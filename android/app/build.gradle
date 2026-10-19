@@ -1,0 +1,77 @@
+plugins {
+    id 'com.android.application'
+}
+
+/**
+ * 前端资源只有一个来源：仓库根目录的 public/。
+ * 构建时同步到 assets/，不在 android/ 下另存副本——否则两边会漂移。
+ * 离线包（public/offline/bundle.js）由 node scripts/build-standalone.js 生成。
+ */
+def repoRoot = rootProject.projectDir.parentFile
+def webSource = new File(repoRoot, 'public')
+def assetsTarget = file('src/main/assets')
+
+android {
+    namespace 'cn.akexin.timetable'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "cn.akexin.timetable"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+        // 只保留中文与英文资源，减小体积
+        resourceConfigurations += ['zh', 'en']
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            // 未配置正式签名时沿用 debug 签名，保证产物可直接安装
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // 仅用于 WebViewAssetLoader：把 assets 映射到 https://appassets.androidplatform.net，
+    // 相比 file:// 能正常使用 localStorage / IndexedDB，且属于安全来源。
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
+
+tasks.register('syncWebAssets', Sync) {
+    group = 'build'
+    description = '把 public/ 同步进 assets/'
+    from(webSource)
+    into(assetsTarget)
+    doFirst {
+        def bundle = new File(webSource, 'offline/bundle.js')
+        if (!bundle.exists()) {
+            throw new GradleException(
+                "缺少 ${bundle}。请先在仓库根执行：node scripts/build-standalone.js")
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn 'syncWebAssets'
+}
+
+// 清理时一并删除同步过来的前端资源，避免旧文件残留进 APK
+tasks.register('cleanWebAssets', Delete) {
+    delete assetsTarget
+}
+tasks.named('clean').configure {
+    dependsOn 'cleanWebAssets'
+}

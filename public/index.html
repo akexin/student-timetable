@@ -306,6 +306,45 @@
 <div class="mask" id="mask"></div>
 <div class="toast" id="toast"></div>
 
-<script src="/app.js"></script>
+<script>
+/* 双模式入口
+ * ----------------------------------------------------------------------------
+ * 服务器模式（node src/server.js）
+ *   直接加载 app.js，请求打到真实 HTTP 服务。
+ * 离线模式（Android APK，WebViewAssetLoader 的 https://appassets.androidplatform.net）
+ *   先加载 offline/runtime.js（Buffer/fs/crypto shim + fetch 拦截层），
+ *   再加载 offline/bundle.js（打包后的 src/*.js），由拦截层把 /api/** 交给后端路由。
+ *   app.js 会在离线运行时执行完 boot() 之后被自动插入，避免早于数据就绪。
+ */
+(function () {
+  var isStandalone =
+    location.protocol === 'file:' ||
+    /(^|\.)appassets\.androidplatform\.net$/.test(location.hostname) ||
+    document.documentElement.hasAttribute('data-standalone');
+
+  function appendScript(src, onError) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.async = false;
+    if (onError) s.onerror = onError;
+    document.body.appendChild(s);
+    return s;
+  }
+
+  if (!isStandalone) {
+    appendScript('app.js');
+    return;
+  }
+
+  appendScript('offline/runtime.js', function () {
+    document.body.insertAdjacentHTML('afterbegin',
+      '<pre style="padding:24px;font:13px/1.6 monospace;color:#b42318">' +
+      '离线运行时加载失败：offline/runtime.js 未找到。\n' +
+      '请先执行 node scripts/build-standalone.js 生成 bundle。</pre>');
+  }).onload = function () {
+    appendScript('offline/bundle.js');
+  };
+})();
+</script>
 </body>
 </html>

@@ -8,3 +8,18 @@ data/njpi-timetable.json
 data/*.tmp
 scripts/tmp/
 !data/.gitkeep
+
+# ---------- 离线包与 Android 构建产物 ----------
+# bundle.js 由 scripts/build-standalone.js 生成，不入库
+public/offline/bundle.js
+# 构建时从 public/ 同步而来，不入库
+android/app/src/main/assets/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+*.keystore
+*.jks
