@@ -3,13 +3,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Node](https://img.shields.io/badge/Node.js-%E2%89%A518-brightgreen)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-blue)
-![Tests](https://img.shields.io/badge/tests-78%20passed-success)
+![Tests](https://img.shields.io/badge/tests-94%20passed-success)
+[![Android APK](https://img.shields.io/badge/Android-APK-3DDC84?logo=android&logoColor=white)](https://github.com/akexin/student-timetable/releases/tag/apk-latest)
 
-一套**零第三方依赖**、开箱即用的学生课表管理系统。覆盖「录入 → 存储 → 导入导出 → 日历同步」完整链路，内置 REST API，**支持通过 URL 订阅方式把课表实时同步到小米手机日历**。
+一套**零第三方依赖**、开箱即用的学生课表管理系统。覆盖「录入 → 存储 → 导入导出 → 日历同步」完整链路，内置 REST API，**支持通过 URL 订阅方式把课表实时同步到小米手机日历**，并提供**可离线运行的 Android APK**。
 
 - **源码栈**：Node.js（≥18）原生 `node:http` + 单文件 JSON 持久化，**不依赖任何 npm 包**（含 Excel 与 ZIP 打包均为自实现）
 - **前端**：原生 HTML/CSS/JS 单页管理端，无构建步骤，响应式适配手机
-- **状态**：78 项端到端冒烟测试全部通过（`npm test`）
+- **Android**：离线单机版 APK，无需电脑与服务器，数据存手机本地（见 [第十一节](#十一构建-android-apk离线单机版)）
+- **状态**：78 项端到端测试 + 16 项离线链路测试，全部通过（`npm run test:all`）
 
 ---
 
@@ -646,7 +648,7 @@ timetable/
 ├── README.md                        # 本文档
 ├── LICENSE                          # MIT
 ├── .gitignore
-├── src/
+├── src/                             # 业务内核（服务器版与 APK 版共用同一份）
 │   ├── server.js        # HTTP 服务、路由、鉴权、CORS、静态资源
 │   ├── store.js         # JSON 持久化（含配置与 API Key）
 │   ├── model.js         # 字段定义、校验、周次规则、上课实例展开
@@ -656,15 +658,29 @@ timetable/
 │   ├── xlsx.js          # 自实现 OOXML 写入器（含 CRC32/ZIP 打包）
 │   └── util.js          # 日期/CSV/CRC32 等工具
 ├── public/
-│   ├── index.html       # 管理端页面（响应式，适配手机）
+│   ├── index.html       # 管理端页面（响应式，适配手机；双模式入口）
 │   ├── app.js           # 管理端逻辑（周视图 / 日程列表双模式）
-│   └── style.css        # 样式（含 900 / 640 / 400px 断点）
+│   ├── style.css        # 样式（含 900 / 640 / 400px 断点）
+│   └── offline/         # 离线运行时（仅 APK 模式加载）
+│       ├── runtime.js   # Buffer/crypto/fs shim + fetch 拦截 + IndexedDB
+│       └── bundle.js    # 由 src/*.js 打包生成（gitignore，不入库）
+├── android/                         # Android WebView 外壳
+│   ├── settings.gradle / build.gradle / gradle.properties
+│   └── app/
+│       ├── build.gradle             # 含 syncWebAssets：public/ → assets/
+│       └── src/main/
+│           ├── AndroidManifest.xml
+│           ├── java/cn/akexin/timetable/MainActivity.java
+│           └── res/                 # 图标、主题、文案
+├── .github/workflows/android.yml     # 云端构建 APK（JDK17 + Gradle 8.7）
 ├── docs/
 │   ├── xiaomi-calendar-sync.md   # 小米日历同步专项说明（含排障表）
 │   └── sample-timetable.ics      # 示例输出
 ├── scripts/
 │   ├── seed.js          # 示例数据
-│   ├── smoke.js         # 端到端测试（78 项）
+│   ├── smoke.js         # 服务器模式端到端测试（78 项）
+│   ├── build-standalone.js  # 把 src/*.js 打包为 offline/bundle.js
+│   ├── test-offline.js  # 离线链路测试（16 项，CI 质量门）
 │   ├── import-njpi.js   # 教务系统直连导入（jwxt.njpi.edu.cn）
 │   └── open-firewall.ps1# Windows 防火墙放行/回收端口
 └── data/                # 运行时数据（db.json、config.json，已 gitignore）
@@ -675,10 +691,16 @@ timetable/
 ## 九、测试与验证
 
 ```bash
-npm test      # node scripts/smoke.js
+npm test              # 服务器模式：78 项端到端测试
+npm run test:offline  # 离线模式：打包 + 16 项链路测试
+npm run test:all      # 两者依次执行（94 项）
 ```
 
-覆盖：鉴权、学期 CRUD 与校验、Monday 对齐、课程 CRUD/批量/过滤、节假日语义、周视图与放假剔除、统计、**五种导出格式**、ICS 的 CRLF 与 75 字节折叠/RRULE/EXDATE/VALARM/VTIMEZONE、JSON/CSV/ICS/URL 四类导入与三种冲突策略、订阅地址与令牌轮换、级联删除、静态资源。当前结果：**通过 78 项，失败 0 项**。
+**服务器模式（78 项）**：鉴权、学期 CRUD 与校验、Monday 对齐、课程 CRUD/批量/过滤、节假日语义、周视图与放假剔除、统计、**五种导出格式**、ICS 的 CRLF 与 75 字节折叠/RRULE/EXDATE/VALARM/VTIMEZONE、JSON/CSV/ICS/URL 四类导入与三种冲突策略、订阅地址与令牌轮换、级联删除、静态资源。
+
+**离线模式（16 项）**：在 Node 中模拟浏览器环境实跑 `runtime.js + bundle.js`，覆盖 API Key 鉴权、默认学期创建、建课、周视图、统计、ICS（CRLF/RRULE/SUMMARY）、**XLSX 的 ZIP 魔数校验**（证明 Buffer shim 正确）、CSV 导入、订阅令牌与 `/ics/:token.ics` 免鉴权访问。
+
+当前结果：**94 项全部通过**。
 
 ---
 
@@ -687,3 +709,83 @@ npm test      # node scripts/smoke.js
 - 存储为单文件 JSON（`data/db.json`），适合单机/班级规模使用；生产环境如需多写并发，建议替换 `src/store.js` 为数据库实现（保持同名方法即可）。
 - ICS 导入不支持全天事件（大学课表无此场景），会被跳过并在 `details` 中说明。
 - 若同一时段在同一天安排多门课，管理端会自动横向分列显示，不做冲突校验（教务场景允许选修冲突）。
+
+---
+
+## 十一、构建 Android APK（离线单机版）
+
+### 11.1 直接下载安装
+
+APK 由 GitHub Actions 在云端构建，无需本机安装 JDK 与 Android SDK：
+
+**[下载最新 APK](https://github.com/akexin/student-timetable/releases/tag/apk-latest)**（`app-debug.apk`，约 0.5 MB）
+
+安装步骤：下载 → 允许「安装未知来源应用」→ 安装 → 打开即用（首次启动会自动创建一个当前学年的空学期）。
+
+| 项目 | 值 |
+|---|---|
+| 应用名 | 学生课表 |
+| 包名 | `cn.akexin.timetable`（debug 构建为 `.debug` 后缀，可与正式版共存） |
+| 最低系统 | Android 8.0（API 26） |
+| 目标 SDK | 34 |
+| 体积 | 约 0.5 MB |
+| 权限 | 仅 `INTERNET`（用于可选的"从远程 URL 导入"，离线使用不需要） |
+
+### 11.2 它为什么能离线运行
+
+Android 上跑不了 Node 服务，因此没有重写业务逻辑，而是**补齐浏览器缺失的运行时**：
+
+```
+Android WebView
+  └─ https://appassets.androidplatform.net/index.html   ← WebViewAssetLoader
+       ├─ offline/runtime.js   补齐 Buffer / crypto / fs / path / process
+       │                       并把 fetch 的 /api/** 拦截下来
+       └─ offline/bundle.js    src/*.js 打包（define/require）
+                                ↓
+                        server.js 的 handle(req, res)
+                                ↓
+                        store / importers / exporters（原样复用）
+```
+
+关键点：
+
+1. **`src/` 下一行都没改**。服务器模式与离线模式跑的是同一份源码，不存在"两份实现慢慢漂移"的问题。
+2. **`fs` 被替换为「内存 + IndexedDB」**：`store.js` 依旧是同步读写，启动时从 IndexedDB 预载到内存，写操作防抖落盘。
+3. **`handle(req, res)` 直接复用**：`runtime.js` 构造等价的 req/res 桩对象，路由、API Key 鉴权、参数校验、导入导出全部沿用后端实现。
+4. **WebViewAssetLoader 而非 `file://`**：`https://appassets.androidplatform.net` 属于安全来源，`localStorage` 与 `IndexedDB` 才能正常工作——这是数据能持久化的前提。
+5. **导出走原生保存**：WebView 对 `<a download>` + `blob:` 支持不完整，因此 `downloadBlob` 被接管为 `AndroidSaver.saveBase64`，CSV / XLSX / ICS 会存到系统「下载」目录（Android 10+ 无需存储权限）。
+
+### 11.3 与服务器版的差异
+
+| 能力 | 服务器版 | APK 离线版 |
+|---|---|---|
+| 课表增删改查、导入导出（JSON/CSV/XLSX/ICS） | ✅ | ✅ |
+| 数据存储位置 | `data/db.json` | 手机 IndexedDB（卸载即清除） |
+| 多设备共享同一份数据 | ✅ | ❌（各设备独立） |
+| 小米日历「订阅 URL」自动同步 | ✅ | ⚠️ 应用内无对外 URL，需导出 `.ics` 文件后手动导入 |
+| 教务系统直连导入 | ✅ | ⚠️ 受浏览器 CORS 限制，建议在电脑端导入后导出 JSON，再到手机上导入 |
+
+> 若需要"手机自动同步小米日历"，仍推荐服务器版 + 局域网/公网地址订阅（见第七节）。
+
+### 11.4 本地构建（可选，需要 JDK 17 + Android SDK）
+
+```bash
+node scripts/build-standalone.js      # 生成 public/offline/bundle.js
+npm run test:offline                  # 16 项离线链路自检（鉴权/存储/ICS/XLSX）
+cd android && gradle assembleDebug    # 产物：app/build/outputs/apk/debug/*.apk
+```
+
+`android/app/build.gradle` 里的 `syncWebAssets` 任务会把仓库根的 `public/` 同步进 `assets/`，**前端只保留一份源码**，不在 `android/` 下另存副本。
+
+### 11.5 持续集成
+
+`.github/workflows/android.yml` 在每次推送到 `main`（且命中 `src/`、`public/`、`android/`、workflow 本身）时自动执行：
+
+1. `node scripts/build-standalone.js` 生成离线包
+2. `node scripts/test-offline.js` —— **质量门**，不通过则不打包，避免产出"能装但打不开"的空壳
+3. Temurin JDK 17 + Gradle 8.7 + `platforms;android-34` / `build-tools;34.0.0`
+4. `gradle assembleDebug` 产出 APK
+5. 上传 artifact，并同步到 [`apk-latest`](https://github.com/akexin/student-timetable/releases/tag/apk-latest) 预发布
+
+也可在 Actions 页面手动 `Run workflow` 触发。
+
